@@ -85,11 +85,20 @@ async def main():
         state.load_account_stats()
         console.print(f"[cyan]Config Directory:[/cyan] {state.CONFIG_DIR}")
         console.print(f"[cyan]Accounts File:[/cyan] {os.path.join(state.CONFIG_DIR, 'accounts.json')}\n")
-        console.print("\n[bold cyan]1.[/bold cyan] Start NeuraSelf")
-        console.print("[bold cyan]2.[/bold cyan] Manage Accounts")
-        console.print("[bold cyan]3.[/bold cyan] Exit")
-        from rich.prompt import Prompt
-        choice = Prompt.ask("\nSelect option", choices=["1", "2", "3"], default="1")
+        
+        # --- HEADLESS / RAILWAY AUTO-START MODIFICATION ---
+        # If NO_INTERACTIVE is set, or we are on Railway, skip the menu and start automatically
+        if os.getenv("NO_INTERACTIVE") == "true" or os.getenv("RAILWAY_ENVIRONMENT") == "production":
+            console.print("[bold cyan]Headless mode detected. Auto-starting NeuraSelf...[/bold cyan]")
+            choice = "1" 
+        else:
+            console.print("\n[bold cyan]1.[/bold cyan] Start NeuraSelf")
+            console.print("[bold cyan]2.[/bold cyan] Manage Accounts")
+            console.print("[bold cyan]3.[/bold cyan] Exit")
+            from rich.prompt import Prompt
+            choice = Prompt.ask("\nSelect option", choices=["1", "2", "3"], default="1")
+        # --- END MODIFICATION ---
+
         if choice == "2":
             import neura_setup
             await neura_setup.account_manager()
@@ -97,13 +106,36 @@ async def main():
         elif choice == "3":
             console.print("\n[yellow]Shutting down. See you next time![/yellow]")
             sys.exit(0)
+            
+        # --- SECURE TOKEN LOADING MODIFICATION ---
         try:
-            acc_path = os.path.join(state.CONFIG_DIR, 'accounts.json')
-            with open(acc_path, 'r') as f:
-                acc_data = json.load(f)
-                accounts = [a for a in acc_data.get('accounts', []) if a.get('enabled', True)]
-        except:
+            # Try to read the token from Railway Environment Variable first
+            token_from_env = os.getenv("DISCORD_TOKEN")
+            
+            if token_from_env:
+                # If the variable exists, create a dummy account list just for this token
+                accounts = [{
+                    'token': token_from_env, 
+                    'enabled': True, 
+                    'name': 'Railway Account',
+                    'channels': [] 
+                }]
+                console.print("[green]Loaded DISCORD_TOKEN from Environment Variables![/green]")
+            else:
+                # Fallback to reading accounts.json if no env variable is set
+                acc_path = os.path.join(state.CONFIG_DIR, 'accounts.json')
+                with open(acc_path, 'r') as f:
+                    acc_data = json.load(f)
+                    accounts = [a for a in acc_data.get('accounts', []) if a.get('enabled', True)]
+        except FileNotFoundError:
+            # Only happens if NO env variable AND no accounts.json exists
+            console.print("[bold red]Error: No DISCORD_TOKEN variable set and no accounts.json found![/bold red]")
             accounts = []
+        except Exception as e:
+            console.print(f"[red]Error reading accounts: {e}[/red]")
+            accounts = []
+        # --- END MODIFICATION ---
+
         if not accounts:
             console.print("[bold red]No active accounts? Add some in the Account Manager (Option 2).[/bold red]")
             time.sleep(2)
@@ -156,6 +188,13 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
+        console.print("[dim]Shutting down safely...[/dim]")
+        
+        # --- SAFE SHUTDOWN MODIFICATION ---
+        # This forces the Railway container to close after 2 seconds so it doesn't hang
+        threading.Timer(2.0, lambda: os._exit(0)).start()
+        # --- END MODIFICATION ---
+        
         try:
             import utils.history_tracker as ht
             ht.end_session()
