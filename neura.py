@@ -87,7 +87,6 @@ async def main():
         console.print(f"[cyan]Accounts File:[/cyan] {os.path.join(state.CONFIG_DIR, 'accounts.json')}\n")
         
         # --- HEADLESS / RAILWAY AUTO-START MODIFICATION ---
-        # If NO_INTERACTIVE is set, or we are on Railway, skip the menu and start automatically
         if os.getenv("NO_INTERACTIVE") == "true" or os.getenv("RAILWAY_ENVIRONMENT") == "production":
             console.print("[bold cyan]Headless mode detected. Auto-starting NeuraSelf...[/bold cyan]")
             choice = "1" 
@@ -107,22 +106,31 @@ async def main():
             console.print("\n[yellow]Shutting down. See you next time![/yellow]")
             sys.exit(0)
             
-        # --- SECURE TOKEN LOADING MODIFICATION ---
+        # --- SECURE TOKEN AND CHANNEL LOADING ---
         try:
             # Try to read the token from Railway Environment Variable first
             token_from_env = os.getenv("DISCORD_TOKEN")
             
+            # Read the channel ID from Railway Environment Variable
+            channel_id_from_env = os.getenv("CHANNEL_ID")
+            valid_channels = []
+            
+            if channel_id_from_env and channel_id_from_env != "None":
+                # Parse it into a list
+                valid_channels = [int(channel_id_from_env)]
+                console.print(f"[green]Loaded CHANNEL_ID from Environment: {channel_id_from_env}[/green]")
+            
             if token_from_env:
-                # If the variable exists, create a dummy account list just for this token
+                # Use the token directly from Railway's secure variables
                 accounts = [{
                     'token': token_from_env, 
                     'enabled': True, 
                     'name': 'Railway Account',
-                    'channels': [] 
+                    'channels': valid_channels 
                 }]
                 console.print("[green]Loaded DISCORD_TOKEN from Environment Variables![/green]")
             else:
-                # Fallback to reading accounts.json if no env variable is set
+                # Fallback to reading accounts.json if running locally on your PC
                 acc_path = os.path.join(state.CONFIG_DIR, 'accounts.json')
                 with open(acc_path, 'r') as f:
                     acc_data = json.load(f)
