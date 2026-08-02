@@ -59,6 +59,21 @@ BLOCK_DURATION = 300
 MAX_ATTEMPTS = 5
 
 def load_auth_config():
+    # --- FIX: READ FROM ENVIRONMENT VARIABLES FIRST ---
+    env_username = os.getenv("DASHBOARD_USERNAME")
+    env_password = os.getenv("DASHBOARD_SECRET")
+    
+    if env_username and env_password:
+        # Log success to the console (will show in Railway logs)
+        print(f"[Dashboard] Authentication loaded from Environment Variables. User: {env_username}")
+        return {
+            "username": env_username,
+            "password": env_password,
+            "secret_key": secrets.token_hex(32) # Generate a secure random secret key
+        }
+    # ---------------------------------------------------
+
+    # Fallback to reading the local auth.json file if env vars aren't set
     if os.path.exists(AUTH_FILE):
         try:
             with open(AUTH_FILE, 'r') as f:
@@ -881,4 +896,4 @@ def register_captcha_challenge(account_id, challenge_data):
 def clear_captcha_challenge(account_id):
     if account_id in _pending_captchas:
         _pending_captchas.pop(account_id, None)
-        state.log_command("SEC", f"Captcha challenge cleared for account {account_id}", "info")
+        state.log_command("SEC", f"Captcha challenge cleared for account {account_id}", "info") 
