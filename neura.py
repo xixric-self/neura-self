@@ -106,19 +106,27 @@ async def main():
             console.print("\n[yellow]Shutting down. See you next time![/yellow]")
             sys.exit(0)
             
-        # --- SECURE TOKEN AND CHANNEL LOADING ---
+        # --- SECURE TOKEN AND MULTI-CHANNEL LOADING ---
         try:
             # Try to read the token from Railway Environment Variable first
             token_from_env = os.getenv("DISCORD_TOKEN")
             
-            # Read the channel ID from Railway Environment Variable
-            channel_id_from_env = os.getenv("CHANNEL_ID")
+            # Read the channel ID(s) from Railway Environment Variable
+            channel_ids_str = os.getenv("CHANNEL_ID")
             valid_channels = []
             
-            if channel_id_from_env and channel_id_from_env != "None":
-                # Parse it into a list
-                valid_channels = [int(channel_id_from_env)]
-                console.print(f"[green]Loaded CHANNEL_ID from Environment: {channel_id_from_env}[/green]")
+            if channel_ids_str and channel_ids_str != "None":
+                # Split the string by commas and clean up whitespace
+                ids = [c_id.strip() for c_id in channel_ids_str.split(',') if c_id.strip()]
+                
+                for c_id_str in ids:
+                    try:
+                        valid_channels.append(int(c_id_str))
+                    except ValueError:
+                        # Skip invalid IDs and warn in logs
+                        console.print(f"[yellow]Warning: '{c_id_str}' is not a valid Channel ID, skipping...[/yellow]")
+                
+                console.print(f"[green]Loaded {len(valid_channels)} channel(s) from CHANNEL_ID Environment Variable![/green]")
             
             if token_from_env:
                 # Use the token directly from Railway's secure variables
