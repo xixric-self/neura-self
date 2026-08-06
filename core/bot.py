@@ -10,10 +10,12 @@
 # along with NeuraSelf-UwU. If not, see <https://www.gnu.org/licenses/>.
 
 
+
 """
 Author: Routo
 NeuraSelf-UwU - https://github.com/routo-loop/neura-self
 """
+
 
 
 import discord
@@ -249,15 +251,24 @@ class NeuraBot(commands.Bot):
             if current_time < self.warmup_until:
                  await asyncio.sleep(max(0.1, self.warmup_until - current_time))
 
-            if current_time < self.throttle_until:
-                wait = self.throttle_until - current_time
-                if wait == float('inf'):
+            while (self.paused or time.time() < self.throttle_until) and self.active:
+                if self.paused or self.throttle_until == float('inf'):
                     self.log("INFO", "Safety Pause: Paused until manually resumed or captcha solved")
-                    while self.paused or self.throttle_until == float('inf'):
+                    while (self.paused or self.throttle_until == float('inf')) and self.active:
                         await asyncio.sleep(1)
                 else:
-                    self.log("INFO", f"Safety Pause: Resuming in {round(wait, 1)}s (Waiting for OwO Slow-Down)")
-                    await asyncio.sleep(wait + 0.1)
+                    wait_time = self.throttle_until - time.time()
+                    self.log("INFO", f"Safety Pause: Resuming in {round(wait_time, 1)}s (Waiting for OwO Slow-Down)")
+                    while time.time() < self.throttle_until and not self.paused and self.throttle_until != float('inf') and self.active:
+                        rem = self.throttle_until - time.time()
+                        if rem <= 0:
+                            break
+                        await asyncio.sleep(min(1.0, rem))
+                    if not self.paused and self.throttle_until != float('inf') and self.active:
+                        await asyncio.sleep(0.1)
+
+            if not self.active or self.paused:
+                return False
 
             stealth_cfg = self.config.get('stealth', {})
             typing_enabled = stealth_cfg.get('typing_enabled', False)
@@ -266,7 +277,14 @@ class NeuraBot(commands.Bot):
             now = time.time()
             elapsed = now - self.last_sent_time
             if elapsed < wait_limit:
-                await asyncio.sleep(wait_limit - elapsed)
+                rem_wait = wait_limit - elapsed
+                while rem_wait > 0 and self.active and not self.paused:
+                    sleep_dur = min(1.0, rem_wait)
+                    await asyncio.sleep(sleep_dur)
+                    rem_wait -= sleep_dur
+
+            if not self.active or self.paused:
+                return False
 
             c_id = target_channel_id or self.channel_id
             channel = self.get_channel(c_id)
@@ -277,7 +295,7 @@ class NeuraBot(commands.Bot):
                     self.log("ERROR", f"Failed to fetch channel {c_id}: {e}")
                     return False
             
-            if not channel:
+            if not channel or not self.active or self.paused:
                 return False
             
             try:
@@ -337,7 +355,7 @@ class NeuraBot(commands.Bot):
     async def send_message(self, content, skip_typing=False, priority=False, target_channel_id=None):
         if not self.active:
             return False
-        if self.paused and "autohunt" not in content.lower() and "check" not in content.lower():
+        if self.paused:
             return False
         
         if state.checking_gems.get(self.user_id):
@@ -592,7 +610,7 @@ class NeuraBot(commands.Bot):
 
 
     def check_version(self):
-        CURRENT_VERSION = "2.4.3" 
+        CURRENT_VERSION = "2.4.4" 
         VERSION_URL = "https://raw.githubusercontent.com/routo-loop/neura_status_api/main/version.json"
         
         self.log("SYS", "Checking for updates...")
@@ -600,7 +618,7 @@ class NeuraBot(commands.Bot):
             r = requests.get(VERSION_URL, timeout=5)
             if r.status_code == 200:
                 data = r.json()
-                latest_version = data.get("version", "2.4.3")
+                latest_version = data.get("version", "2.4.4")
                 changelog = data.get("changelog", "No changes listed.")
                 
                 if latest_version != CURRENT_VERSION:
@@ -732,7 +750,7 @@ class NeuraBot(commands.Bot):
                         ran_successfully = True
                         continue
                     
-                    if self.paused and "autohunt" not in content.lower() and "check" not in content.lower():
+                    if self.paused:
                         continue
 
                     gem_check_val = state.checking_gems.get(self.user_id)

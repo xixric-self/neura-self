@@ -17,7 +17,6 @@ NeuraSelf-UwU - https://github.com/routo-loop/neura-self
 
 
 
-
 import sys
 import asyncio
 import time
@@ -180,7 +179,7 @@ class Security(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if not self.enabled: return
-        if isinstance(message.channel, discord.DMChannel) and message.author.id == int(self.monitor_id):
+        if (message.guild is None or isinstance(message.channel, discord.DMChannel)) and message.author.id == int(self.monitor_id):
             if (discord.utils.utcnow() - message.created_at).total_seconds() > 30: return
             if "i have verified that you are human" in message.content.lower():
                 self.bot.web_solver.mark_verification_done(str(self.bot.user.id))
@@ -262,7 +261,8 @@ class Security(commands.Cog):
                 has_key = bool(
                     sol_cfg.get("yescaptcha_api_key") or
                     sol_cfg.get("nopecha_api_key") or
-                    sol_cfg.get("anticaptcha_api_key")
+                    sol_cfg.get("anticaptcha_api_key") or
+                    sol_cfg.get("captchaly_api_key")
                 )
                 if sol_cfg.get("enabled", True) and has_key:
                     service_name = self.bot.web_solver.active_service_name.capitalize()
@@ -292,12 +292,7 @@ class Security(commands.Cog):
 
         if self.bot.owo_user is None:
             self.bot.owo_user = message.author
-        try:
-            allowed_channels = [int(ch) for ch in self.bot.channels]
-        except:
-            allowed_channels = [self.bot.channel_id]
 
-        if message.channel.id not in allowed_channels: return
         content = message.content or ""
         embed_text = ""
         if message.embeds:
@@ -310,6 +305,24 @@ class Security(commands.Cog):
         text_to_check = f"{content} {embed_text}"
         is_for_me = self.bot.is_message_for_me(message)
         if not is_for_me: return
+
+
+        is_security_event = (
+            self._contains_keyword(text_to_check, self.ban_keywords) or
+            self.warning_pattern.search(text_to_check) is not None or
+            (len(message.attachments) > 0 and self._contains_keyword(text_to_check, self.image_captcha_keywords)) or
+            self._contains_keyword(text_to_check, self.captcha_keywords) or
+            self._get_captcha_url(message) is not None or
+            re.search(r'https?://owobot\.com/captcha/\S+', text_to_check) is not None
+        )
+
+        try:
+            allowed_channels = [int(ch) for ch in self.bot.channels]
+        except:
+            allowed_channels = [self.bot.channel_id]
+
+        if not is_security_event and message.channel.id not in allowed_channels:
+            return
 
         if self._contains_keyword(text_to_check, self.ban_keywords):
             self.bot.paused = True
@@ -365,7 +378,8 @@ class Security(commands.Cog):
                     has_key = bool(
                         sol_cfg.get("yescaptcha_api_key") or
                         sol_cfg.get("nopecha_api_key") or
-                        sol_cfg.get("anticaptcha_api_key")
+                        sol_cfg.get("anticaptcha_api_key") or
+                        sol_cfg.get("captchaly_api_key")
                     )
                     if sol_cfg.get("enabled", True) and has_key:
                         service_name = self.bot.web_solver.active_service_name.capitalize()
@@ -460,7 +474,8 @@ class Security(commands.Cog):
             has_key = bool(
                 sol_cfg.get("yescaptcha_api_key") or
                 sol_cfg.get("nopecha_api_key") or
-                sol_cfg.get("anticaptcha_api_key")
+                sol_cfg.get("anticaptcha_api_key") or
+                sol_cfg.get("captchaly_api_key")
             )
             if sol_cfg.get("enabled", True) and has_key:
                 service_name = self.bot.web_solver.active_service_name.capitalize()
